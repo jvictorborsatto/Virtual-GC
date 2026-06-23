@@ -252,18 +252,18 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
       </div>
       <div class="param-const" id="pc-colPhase">
         <select id="colPhase" onchange="updateColInfo()">
-          <option value="DB5">Phase-5 OT · non-polar (5% phenyl / 95% PDMS)</option>
-          <option value="DBWAX">Phase-WAX OT · polar (polyethylene glycol, PEG)</option>
-          <option value="DB17">Phase-17 OT · mid-polarity (50% phenyl / 50% PDMS)</option>
-          <option value="OV17P">Phase-17 packed · mid-pol. (50% phenyl / 50% methyl silicone)</option>
+          <option value="Phase5">Phase-5 OT · non-polar (5% phenyl / 95% PDMS)</option>
+          <option value="PhaseWAX">Phase-WAX OT · polar (polyethylene glycol, PEG)</option>
+          <option value="Phase17">Phase-17 OT · mid-polarity (50% phenyl / 50% PDMS)</option>
+          <option value="Phase17P">Phase-17 packed · mid-pol. (50% phenyl / 50% methyl silicone)</option>
         </select>
       </div>
       <div class="param-var" id="pv-colPhase">
         <div class="f" style="margin-top:4px">
-          <div class="cbrow"><input type="checkbox" id="colPhase_vDB5"   value="DB5"   checked><label for="colPhase_vDB5"   style="margin:0">Phase-5 OT (non-polar)</label></div>
-          <div class="cbrow"><input type="checkbox" id="colPhase_vDBWAX" value="DBWAX" checked><label for="colPhase_vDBWAX" style="margin:0">Phase-WAX OT (polar)</label></div>
-          <div class="cbrow"><input type="checkbox" id="colPhase_vDB17"  value="DB17"><label for="colPhase_vDB17"  style="margin:0">Phase-17 OT (mid-polarity)</label></div>
-          <div class="cbrow"><input type="checkbox" id="colPhase_vOV17P" value="OV17P"><label for="colPhase_vOV17P" style="margin:0">Phase-17 packed</label></div>
+          <div class="cbrow"><input type="checkbox" id="colPhase_vPhase5"   value="Phase5"   checked><label for="colPhase_vPhase5"   style="margin:0">Phase-5 OT (non-polar)</label></div>
+          <div class="cbrow"><input type="checkbox" id="colPhase_vPhaseWAX" value="PhaseWAX" checked><label for="colPhase_vPhaseWAX" style="margin:0">Phase-WAX OT (polar)</label></div>
+          <div class="cbrow"><input type="checkbox" id="colPhase_vPhase17"  value="Phase17"><label for="colPhase_vPhase17"  style="margin:0">Phase-17 OT (mid-polarity)</label></div>
+          <div class="cbrow"><input type="checkbox" id="colPhase_vPhase17P" value="Phase17P"><label for="colPhase_vPhase17P" style="margin:0">Phase-17 packed</label></div>
         </div>
       </div>
       <div id="col-phase-info" class="itx" style="margin-top:4px"></div>
@@ -942,7 +942,7 @@ input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:po
     </div>
     <div class="modal-row">
       <div class="f"><label>Phase-WAX OT polarity boost (vs Phase-5 OT)</label><input type="number" id="fWaxBoost" value="1.8" step="0.1" min="1.0" max="4.0"></div>
-      <div class="f"><label>Phase-17 OT polarity factor (vs Phase-5 OT)</label><input type="number" id="fDB17Factor" value="1.35" step="0.05" min="1.0" max="3.0"></div>
+      <div class="f"><label>Phase-17 OT polarity factor (vs Phase-5 OT)</label><input type="number" id="fPhase17Factor" value="1.35" step="0.05" min="1.0" max="3.0"></div>
     </div>
     <div class="div"></div>
     <div class="brow">
@@ -1033,13 +1033,13 @@ function getFactors(){
     splitTail:+document.getElementById('fSplitTail').value||1.6,
     packedWidth:+document.getElementById('fPackedWidth').value||8.0,
     waxBoost:+document.getElementById('fWaxBoost').value||1.8,
-    db17Factor:+document.getElementById('fDB17Factor').value||1.35,
+    Phase17Factor:+document.getElementById('fPhase17Factor').value||1.35,
   };
 }
 function openFactors(){document.getElementById('modalFactors').classList.add('on');}
 function closeFactors(){document.getElementById('modalFactors').classList.remove('on');}
 function resetFactors(){
-  const def={fN0:80000,fPackedFactor:0.04,fUoptHe:1.0,fTempKay:0.045,fPolAlpha:2.5,fFilmK:1.8,fSplitTail:1.6,fPackedWidth:8.0,fWaxBoost:1.8,fDB17Factor:1.35};
+  const def={fN0:80000,fPackedFactor:0.04,fUoptHe:1.0,fTempKay:0.045,fPolAlpha:2.5,fFilmK:1.8,fSplitTail:1.6,fPackedWidth:8.0,fWaxBoost:1.8,fPhase17Factor:1.35};
   Object.entries(def).forEach(([k,v])=>{const el=document.getElementById(k);if(el)el.value=v;});
   notify('Factors reset to defaults');
 }
@@ -1114,11 +1114,11 @@ function updateColInfo(){
   const len=+document.getElementById('collen').value;
   const el=document.getElementById('col-phase-info');
   const warn=document.getElementById('col-warn');
-  const isPacked=(id>=2.0 || phase==='OV17P');
+  const isPacked=(id>=2.0 || phase==='Phase17P');
   const msgs=[];
-  if(phase==='DB5') el.innerHTML='<span class="ok">Non-polar — apolar cpds elute early, polar cpds strongly retained</span>';
-  else if(phase==='DBWAX') el.innerHTML='<span class="hi">Polar — polar cpds elute late, ideal for alcohols/aldehydes/acids</span>';
-  else if(phase==='DB17') el.innerHTML='<span class="warn">Intermediate — balanced retention across compound classes</span>';
+  if(phase==='Phase5') el.innerHTML='<span class="ok">Non-polar — apolar cpds elute early, polar cpds strongly retained</span>';
+  else if(phase==='PhaseWAX') el.innerHTML='<span class="hi">Polar — polar cpds elute late, ideal for alcohols/aldehydes/acids</span>';
+  else if(phase==='Phase17') el.innerHTML='<span class="warn">Intermediate — balanced retention across compound classes</span>';
   else el.innerHTML='<span class="danger">Packed column — wider peaks, lower efficiency, but high sample capacity</span>';
   if(isPacked) msgs.push('<span class="warn">⚠ Packed column: N significantly lower, peaks broader</span>');
   if(id===0.10) msgs.push('<span class="ok">✓ Narrow-bore: highest efficiency (N↑), needs low flow</span>');
@@ -1223,7 +1223,7 @@ const CARRIER_DIFF={He:1.0, H2:1.4, N2:0.32};
 const CARRIER_VISC={He:0.75, H2:0.62, N2:1.0};
 
 // Column type detection
-function isPacked(phase,id){return phase==='OV17P'||id>=2.0;}
+function isPacked(phase,id){return phase==='Phase17P'||id>=2.0;}
 
 // Calculate theoretical plates using Van Deemter
 function calcPlatesGC(params){
@@ -1278,14 +1278,14 @@ function calcRetentionGC(cpd, params){
   let polInteraction = 1.0;
   const polFrac = cpd.pol / 1000;
   const alpha = F.polAlpha;
-  if(phase==='DB5'){
+  if(phase==='Phase5'){
     polInteraction = 1 + 0.5 * polFrac * alpha * 0.3;
-  } else if(phase==='DBWAX'){
+  } else if(phase==='PhaseWAX'){
     polInteraction = 1 + polFrac * alpha * F.waxBoost;
-  } else if(phase==='DB17'){
-    polInteraction = 1 + polFrac * alpha * F.db17Factor;
+  } else if(phase==='Phase17'){
+    polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
   } else {
-    polInteraction = 1 + polFrac * alpha * F.db17Factor;
+    polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
   }
   k_base *= polInteraction;
 
@@ -1409,8 +1409,8 @@ function genGC(){
     {cbId:'collen_v60',val:60},{cbId:'collen_v2',val:2}
   ]});
   const phases=getParamValues('colPhase','colPhase',{choices:[
-    {cbId:'colPhase_vDB5',val:'DB5'},{cbId:'colPhase_vDBWAX',val:'DBWAX'},
-    {cbId:'colPhase_vDB17',val:'DB17'},{cbId:'colPhase_vOV17P',val:'OV17P'}
+    {cbId:'colPhase_vPhase5',val:'Phase5'},{cbId:'colPhase_vPhaseWAX',val:'PhaseWAX'},
+    {cbId:'colPhase_vPhase17',val:'Phase17'},{cbId:'colPhase_vPhase17P',val:'Phase17P'}
   ]});
   const carriers=getParamValues('carrier','carrier',{choices:[
     {cbId:'carrier_vHe',val:'He'},{cbId:'carrier_vH2',val:'H2'},{cbId:'carrier_vN2',val:'N2'}
