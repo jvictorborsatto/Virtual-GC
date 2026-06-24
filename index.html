@@ -1225,30 +1225,128 @@ const CARRIER_VISC={He:0.75, H2:0.62, N2:1.0};
 // Column type detection
 function isPacked(phase,id){return phase==='Phase17P'||id>=2.0;}
 
-// Calculate theoretical plates using Van Deemter
-function calcPlatesGC(params){
-  const F=getFactors();
-  const {colLen, colId, flow, carrier, phase} = params;
-  const packed=isPacked(phase,colId);
 
-  if(packed){
-    const N_packed = F.N0 * F.packedFactor * (colLen/30);
-    return Math.max(100, Math.round(N_packed));
+// ═══════════════════════════════════════════════════════════════
+// GAS CORRECTION FACTORS
+// ═══════════════════════════════════════════════════════════════
+
+function calcVanDeemterFactors(flow, colId, colLen) {
+  // Velocidade linear u (cm/s)
+  const d_cm = colId / 10;
+  const area_cm2 = Math.PI * Math.pow(d_cm / 2, 2);
+  const u = (flow / 60) / area_cm2;   // cm/s
+
+  // Coeficientes Van Deemter típicos para colunas capilares (cm)
+  // A ≈ 0 para capilares (sem empacotamento)
+  // B: difusão longitudinal — proporcional à difusividade do gás
+  // C: transferência de massa — inversamente proporcional à difusividade
+  const VD = {
+    He: { A: 0.00, B: 0.32, C: 0.0023 },   
+    H2: { A: 0.00, B: 0.48, C: 0.0014 },   
+    N2: { A: 0.00, B: 0.12, C: 0.0058 },   
+  };
+
+  const results = {};
+
+
+  const H_ref = VD.He.A + VD.He.B / u + VD.He.C * u;
+
+  for (const gas of ['He', 'H2', 'N2']) {
+    const { A, B, C } = VD[gas];
+    const H = A + B / u + C * u;          // HETP do gás (cm)
+    const N_abs = (colLen * 100) / H;     // N absoluto = L(cm) / H(cm)
+    const efficiencyFactor = H_ref / H;  // >1 se melhor que He, <1 se pior
+    const broadeningFactor = H / H_ref;  // inverso: >1 = mais alargamento
+
+    results[gas] = {
+      H,
+      N_abs: Math.round(N_abs),
+      efficiencyFactor: Math.max(0.1, Math.min(3.0, efficiencyFactor)),
+      broadeningFactor: Math.max(0.3, Math.min(5.0, broadeningFactor)),
+    };
   }
 
-  const lenFactor = colLen / 30;
-  const idFactor = Math.pow(0.25/colId, 0.5);
-  const D_gas = CARRIER_DIFF[carrier]||1.0;
-  const u_opt = 1.0 * D_gas;
-  const d_cm = colId/10;
-  const area_cm2 = Math.PI * (d_cm/2)**2;
-  const u_actual = (flow/60) / area_cm2;
-  const hRel = 0.5 + 0.5/u_actual + 0.05*u_actual;
-  const hOpt = 0.5 + 0.5/u_opt + 0.05*u_opt;
-  const vdFactor = hOpt/hRel;
-  
-  const N = F.N0 * lenFactor * idFactor * vdFactor;
-  return Math.max(1000, Math.round(N));
+  return results;
+}
+
+function getGasCorrectionFactors(carrier, flow, colId, t0oven) {
+  const colLen = parseFloat(document.getElementById('collen')?.value) || 30;
+  const vd = calcVanDeemterFactors(flow, colId, colLen);
+
+  const baseFactors = {
+    He: { efficiency: vd.He.efficiencyFactor, retention: 1.00, broadening: vd.He.broadeningFactor },
+    H2: { efficiency: vd.H2.efficiencyFactor, retention: 1 / Math.pow(1.65, 0.15), broadening: vd.H2.broadeningFactor },
+    N2: { efficiency: vd.N2.efficiencyFactor, retention: 1 / Math.pow(0.51, 0.15), broadening: vd.N2.broadeningFactor },
+  };
+
+  const tempFactor = getTemperatureFactor(t0oven, carrier);
+  const base = baseFactors[carrier] || baseFactors['He'];
+
+  return {
+    efficiency: base.efficiency * tempFactor,  
+    retention:  base.retention,
+    broadening: base.broadening,              
+  };
+}
+
+
+function getTemperatureFactor(t0oven, carrier) {
+    // Temperatura afeta difusividade
+    const T_K = t0oven + 273.15;
+    const T_ref = 333.15; // 60°C
+    
+    const baseFactor = Math.pow(T_K / T_ref, 0.7);
+    
+    // Gases mais leves são mais afetados pela temperatura
+    const gasSensitivity = {
+        'He': 1.0,
+        'H2': 0.9,
+        'N2': 1.2
+    }[carrier] || 1.0;
+    
+    return 1.0 + (baseFactor - 1.0) * gasSensitivity * 0.5;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// calcPlatesGC
+// ═══════════════════════════════════════════════════════════════
+
+function calcPlatesGC(params) {
+    const F = getFactors();
+    const { colLen, colId, flow, carrier, phase } = params;
+    const packed = isPacked(phase, colId);
+    
+    // --- CÁLCULO ORIGINAL (para Hélio) ---
+    let N;
+    if (packed) {
+        const N_packed = F.N0 * F.packedFactor * (colLen/30);
+        N = Math.max(100, Math.round(N_packed));
+    } else {
+        const lenFactor = colLen / 30;
+        const idFactor = Math.pow(0.25/colId, 0.5);
+        const D_gas = CARRIER_DIFF[carrier] || 1.0;
+        const u_opt = 1.0 * D_gas;
+        const d_cm = colId/10;
+        const area_cm2 = Math.PI * (d_cm/2)**2;
+        const u_actual = (flow/60) / area_cm2;
+        const hRel = 0.5 + 0.5/u_actual + 0.05*u_actual;
+        const hOpt = 0.5 + 0.5/u_opt + 0.05*u_opt;
+        const vdFactor = hOpt/hRel;
+        
+        N = F.N0 * lenFactor * idFactor * vdFactor;
+        N = Math.max(1000, Math.round(N));
+    }
+    
+    
+    const factors = getGasCorrectionFactors(carrier, flow, colId, params.t0oven || 60);
+    N = N * factors.efficiency;
+    
+    // Limites realistas
+    const maxN = packed ? 8000 : 120000;
+    const minN = packed ? 50 : 1000;
+    N = Math.max(minN, Math.min(maxN, N));
+    
+    return Math.round(N);
 }
 
 // Calculate oven temperature at time t
@@ -1263,83 +1361,98 @@ function ovenTemp(t, params){
 }
 
 // Calculate retention factor k for a compound at given oven temperature
-function calcRetentionGC(cpd, params){
-  const F = getFactors();
-  const {phase, t0oven, tHold, ramp, tFinal, tHoldFinal, colLen, colId, film, carrier, flow} = params;
-  const packed = isPacked(phase, colId);
 
-  const lambda = 15;
-  const k_ref = 50000;
-  let k_base = k_ref * Math.exp(-lambda * cpd.vol / 1000);
+function calcRetentionGC(cpd, params) {
+    const F = getFactors();
+    const { phase, t0oven, tHold, ramp, tFinal, tHoldFinal, colLen, colId, film, carrier, flow } = params;
+    const packed = isPacked(phase, colId);
+    
+    // --- CÁLCULO ORIGINAL ---
+    const lambda = 15;
+    const k_ref = 50000;
+    let k_base = k_ref * Math.exp(-lambda * cpd.vol / 1000);
 
-  const filmFactor = 1 + F.filmK * (film - 0.25) / 0.25;
-  k_base *= Math.max(0.1, filmFactor);
+    const filmFactor = 1 + F.filmK * (film - 0.25) / 0.25;
+    k_base *= Math.max(0.1, filmFactor);
 
-  let polInteraction = 1.0;
-  const polFrac = cpd.pol / 1000;
-  const alpha = F.polAlpha;
-  if(phase==='Phase5'){
-    polInteraction = 1 + 0.5 * polFrac * alpha * 0.3;
-  } else if(phase==='PhaseWAX'){
-    polInteraction = 1 + polFrac * alpha * F.waxBoost;
-  } else if(phase==='Phase17'){
-    polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
-  } else {
-    polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
-  }
-  k_base *= polInteraction;
+    let polInteraction = 1.0;
+    const polFrac = cpd.pol / 1000;
+    const alpha = F.polAlpha;
+    if(phase==='Phase5') polInteraction = 1 + 0.5 * polFrac * alpha * 0.3;
+    else if(phase==='PhaseWAX') polInteraction = 1 + polFrac * alpha * F.waxBoost;
+    else if(phase==='Phase17') polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
+    else polInteraction = 1 + polFrac * alpha * F.Phase17Factor;
+    k_base *= polInteraction;
 
-  const beta = F.tempKay;
+    const beta = F.tempKay;
+    const d_cm = colId/10;
+    const area_cm2 = Math.PI*(d_cm/2)**2;
+    const u_cms = (flow/60)/area_cm2;
+    const t0_dead = (colLen*100)/u_cms/60;
+    params.t0_dead = t0_dead;
+    
 
-  if(ramp <= 0){
-    // Isothermal: T constante = t0oven
-    const k = k_base * Math.exp(-beta * (t0oven - 60));
-    return Math.max(0.001, k);
-  }
+    const factors = getGasCorrectionFactors(carrier, flow, colId, t0oven);
+    
+  
+    const corrected_t0_dead = t0_dead * factors.retention;
 
-  // Temperature programmed
-  const d_cm = colId/10;
-  const area_cm2 = Math.PI*(d_cm/2)**2;
-  const u_cms = (flow/60)/area_cm2;
-  const t0_dead = (colLen*100)/u_cms/60;
-
-  let integral = 0;
-  const dt = 0.001;
-  const maxT = tHold + (tFinal - t0oven)/Math.max(ramp,0.1) + tHoldFinal + 5;
-  for(let t=0; t<maxT; t+=dt){
-    const T = ovenTemp(t, params);
-    const kt = k_base * Math.exp(-beta * (T - 60));
-    integral += dt / Math.max(kt, 0.0001);
-    if(integral >= 1.0){
-      const tR = t + t0_dead;
-      return {tR, k_eff: Math.max(0.001, (tR - t0_dead)/Math.max(t0_dead, 0.001))};
+    //isotermal
+    if(ramp <= 0){
+        const k = k_base * Math.exp(-beta * (t0oven - 60));
+        const tR = corrected_t0_dead * (1 + 1/k);
+        return { tR, k_eff: Math.max(0.001, k) };
     }
-  }
-  return null;
+
+    // Rampa
+    let integral = 0;
+    const dt = 0.001;
+    const maxT = tHold + (tFinal - t0oven)/Math.max(ramp,0.1) + tHoldFinal + 5;
+    for(let t=0; t<maxT; t+=dt){
+        const T = ovenTemp(t, params);
+        const kt = k_base * Math.exp(-beta * (T - 60));
+        integral += dt / Math.max(kt, 0.0001);
+        if(integral >= 1.0){
+            const tR = t + corrected_t0_dead;
+            return { tR, k_eff: Math.max(0.001, (tR - corrected_t0_dead)/Math.max(corrected_t0_dead, 0.001)) };
+        }
+    }
+    return null;
 }
 
 // Calculate peak width for GC
+
 function calcPeakWidthGC(cpd, params, tR, k_eff, N){
-  const F = getFactors();
-  const {phase, colId, split} = params;
-  const packed = isPacked(phase, colId);
+    const F = getFactors();
+    const { phase, colId, split, carrier, flow } = params;
+    const packed = isPacked(phase, colId);
+    
+    // --- CÁLCULO ORIGINAL ---
+    const sigma = tR / Math.sqrt(Math.max(N, 100));
+    let fwhm = 1.355 * sigma + 0.1;
 
-  const sigma = tR / Math.sqrt(Math.max(N, 100));
-  let fwhm = 1.355 * sigma + 0.1;
+    if(packed) fwhm *= F.packedWidth;
 
-  if(packed){
-    fwhm *= F.packedWidth;
-  }
-
-  if(split===0){
-    return {fwhm: Math.max(0.003, fwhm * 1.5), As: F.splitTail};
-  } else if(split<=10){
-    return {fwhm: Math.max(0.003, fwhm * 1.2), As: 1.15};
-  } else {
-    return {fwhm: Math.max(0.001, fwhm), As: 1.02};
-  }
+    if(split===0) fwhm = Math.max(0.003, fwhm * 1.5);
+    else if(split<=10) fwhm = Math.max(0.003, fwhm * 1.2);
+    else fwhm = Math.max(0.001, fwhm);
+    
+   
+    const factors = getGasCorrectionFactors(carrier, flow, colId, params.t0oven || 60);
+    fwhm = fwhm * factors.broadening;
+    
+    // Limites realistas
+    const minFWHM = packed ? 0.01 : 0.003;
+    const maxFWHM = packed ? 1.0 : 0.3;
+    fwhm = Math.max(minFWHM, Math.min(maxFWHM, fwhm));
+    
+    // Assimetria
+    let As = 1.0;
+    if(split===0) As = F.splitTail;
+    else if(packed) As = 1.3;
+    
+    return { fwhm, As };
 }
-
 // Build temperature profile over time (for overlay)
 function buildTempProfile(params, xMax){
   const pts=[];
